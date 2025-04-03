@@ -1,0 +1,13 @@
+# Excluir dados de entrada com informações sigilosas
+data/input/
+
+# Excluir saída que contenha dados sensíveis (se necessário)
+data/output/
+
+# Outros arquivos temporários ou desnecessários
+*.log
+*.tmp
+
+# Ignorar diretórios __pycache__ e arquivos .pyc
+**/__pycache__/
+*.pyc

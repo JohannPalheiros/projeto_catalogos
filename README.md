@@ -48,7 +48,10 @@ Este projeto tem como objetivo extrair informações de catálogos de peças em 
 - **Python 3.x**
 - **Poppler** – Necessário para converter PDFs em imagens.
 - **Tesseract OCR** – Necessário para reconhecer texto em imagens (OCR).
-- Instale também as dependências com `pip install -r requirements.txt`.
+- Instale também as dependências com:
+  ```bash
+  pip install -r requirements.txt
+  ```
 
 ---
 
@@ -66,7 +69,7 @@ O Poppler é essencial para converter PDF em imagem antes do OCR.
   O site oficial **não fornece binários para Windows**, use:
   👉 [https://github.com/oschwartz10612/poppler-windows/releases](https://github.com/oschwartz10612/poppler-windows/releases)
 
-  Após extrair o `.zip`, adicione a pasta `Library\bin` ao `PATH`. Exemplo:
+  Após extrair o `.zip` em um diretório da sua preferência, adicione o seguinte caminho ao `PATH` do sistema:
   ```
   C:\Ferramentas\poppler-xx\Library\bin
   ```
@@ -80,9 +83,9 @@ O Tesseract realiza a leitura de texto via OCR em PDFs com imagens.
 - **Windows:**
   Baixe aqui: 👉 [https://github.com/UB-Mannheim/tesseract/wiki](https://github.com/UB-Mannheim/tesseract/wiki)
 
-  > 💡 Recomendado: marcar "Adicionar ao PATH" na instalação.
+  > 💡 Recomendado: marcar "Adicionar ao PATH" durante a instalação.
 
-  Se não adicionar ao PATH, você pode definir a variável de ambiente `TESSERACT_PATH` com o caminho:
+  Caso contrário, defina a variável de ambiente `TESSERACT_PATH` apontando para o executável:
   ```
   C:\Users\SEU_USUARIO\AppData\Local\Tesseract-OCR\tesseract.exe
   ```
@@ -99,12 +102,13 @@ O Tesseract realiza a leitura de texto via OCR em PDFs com imagens.
 
 ---
 
-## ✅ Verificação de Ambiente
+## 🔍 Verificação de Ambiente
 
-Após instalar tudo, verifique no terminal se está ok:
+Após instalar tudo, verifique se está funcionando:
 
 ```bash
-tesseract --version
+python -m pip show pytesseract
+python -c "import pytesseract; print(pytesseract.get_tesseract_version())"
 ```
 
 ---
@@ -116,16 +120,72 @@ tesseract --version
    pip install -r requirements.txt
    ```
 
-2. Execute o processamento em lote:
+2. Coloque os arquivos PDF que deseja processar em:
+   ```
+   data/input/pending
+   ```
+
+3. Execute o processamento em lote:
    ```bash
    python src/batch_processor.py
    ```
 
 ---
 
-## 📬 Contato
+## 🧹 Funcionamento Interno (Visão Geral)
+
+1. **Classificação**:
+   - Verifica se o PDF contém texto, imagens ou tabelas.
+2. **Extração**:
+   - Usa a melhor abordagem: texto direto, OCR ou mista.
+3. **Organização**:
+   - Move os arquivos para `data/input/processed/<tipo>`
+   - Salva o texto em `data/output/text/<tipo>`
+   - Registra logs detalhados em `data/output/processing.log`
+
+---
+
+## ❓ FAQ / Possíveis Erros Comuns
+
+### 1. **Erro: `Tesseract não encontrado!`**
+- **Causa:** O Tesseract OCR não está instalado ou não foi adicionado ao `PATH`.
+- **Solução:**
+  - Instale o Tesseract: [Link para Windows](https://github.com/UB-Mannheim/tesseract/wiki)
+  - Ou defina a variável de ambiente `TESSERACT_PATH` com o caminho completo:
+    ```
+    C:\Users\SEU_USUARIO\AppData\Local\Tesseract-OCR\tesseract.exe
+    ```
+
+### 2. **Erro: `PDF não convertido em imagens`**
+- **Causa:** O Poppler não está instalado corretamente ou o executável `pdftoppm` não está no `PATH`.
+- **Solução:**
+  - Use: [https://github.com/oschwartz10612/poppler-windows/releases](https://github.com/oschwartz10612/poppler-windows/releases)
+  - Adicione ao PATH:
+    ```
+    C:\Ferramentas\poppler-xx\Library\bin
+    ```
+
+### 3. **Erro: `PermissionError` ao salvar arquivos**
+- **Causa:** Um arquivo está aberto ou sendo usado.
+- **Solução:** Feche o PDF ou arquivo `.txt` antes de rodar o script.
+
+### 4. **Nenhum texto é extraído**
+- **Causa:** PDF corrompido ou imagens sem OCR.
+- **Solução:** Verifique se `enable_ocr` está ativado. O log informará se o arquivo foi movido para `quarantine`.
+
+### 5. **Quero reiniciar os testes**
+- **Resposta:** Esvazie a pasta `data/output/text/` e mova os arquivos de `data/input/processed/` de volta para `data/input/pending/`
+  - Alternativamente, use a flag `--reset` se for implementada.
+
+### 6. **Posso mudar o número de processos paralelos?**
+- **Sim!** Por padrão, usamos todos os núcleos da máquina. Para limitar (em PCs mais fracos), edite o parâmetro `max_workers` em `batch_processor.py`.
+
+---
+
+## 📨 Contato
 
 Dúvidas, sugestões ou contribuições? Entre em contato:
 
 - 📧 Email: [jpalheiros@gmail.com](mailto:jpalheiros@gmail.com)  
-- 🧑‍💻 GitHub: [JohannPalheiros](https://github.com/JohannPalheiros)
+- 🤝 GitHub: [JohannPalheiros](https://github.com/JohannPalheiros)
+- 💼 LinkedIn: [linkedin.com/in/johannpalheiros](https://www.linkedin.com/in/johannpalheiros/)

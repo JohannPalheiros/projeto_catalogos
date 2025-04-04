@@ -137,4 +137,4 @@ def extract_text_from_images(pdf_path: str, output_dir: str) -> str:
 
     except Exception as e:
         logger.error(f"Erro no OCR: {str(e)}")
-        return ""
+        return None

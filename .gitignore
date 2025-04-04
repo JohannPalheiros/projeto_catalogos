@@ -80,6 +80,18 @@ coverage.xml
 cover/
 
 # =============================
+# RELATÓRIOS DE TESTES
+# =============================
+/reports/
+!/reports/.gitkeep  # mantém a pasta
+
+# =============================
+# DADOS DE TESTES SIGILOSOS
+# =============================
+tests/data/*
+!tests/data/.gitkeep
+
+# =============================
 # DIVERSOS / AMBIENTES
 # =============================
 *.mo

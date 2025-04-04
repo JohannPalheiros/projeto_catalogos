@@ -2,63 +2,37 @@ import pytesseract
 import cv2
 import numpy as np
 import time
+import io
+from PIL import Image
 from pdf2image import convert_from_path
+import fitz  # PyMuPDF
+import hashlib
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 def get_adaptive_block_size(width: int) -> int:
-    """
-    Calcula um tamanho de bloco para a binarização adaptativa,
-    garantindo que seja um número ímpar e não menor que 11.
-    """
     block_size = width // 40
     if block_size % 2 == 0:
         block_size += 1
     return max(11, block_size)
 
 def preprocess_image(image):
-    """
-    Melhora a qualidade da imagem para OCR.
-    
-    Etapas:
-      - Conversão para escala de cinza
-      - Filtro bilateral para suavização preservando bordas
-      - Equalização adaptativa (CLAHE) para melhorar o contraste
-      - Remoção de padrões repetitivos no fundo com mediana
-      - Binarização adaptativa com bloco de tamanho dinâmico
-      - Abertura morfológica para eliminar pequenos ruídos
-      - Correção de inclinação (Deskewing) utilizando Transformada de Hough
-    """
     try:
         start_time = time.time()
-
-        # Converte a imagem para array e para escala de cinza
         image_np = np.array(image)
         gray = cv2.cvtColor(image_np, cv2.COLOR_BGR2GRAY)
-
-        # Suavização preservando bordas
         bilateral = cv2.bilateralFilter(gray, d=9, sigmaColor=75, sigmaSpace=75)
-
-        # Equalização adaptativa para melhorar o contraste
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         enhanced = clahe.apply(bilateral)
-
-        # Remoção de padrões repetitivos no fundo (opcional)
         background_removed = cv2.medianBlur(enhanced, 3)
-
-        # Binarização adaptativa com tamanho de bloco dinâmico
         block_size = get_adaptive_block_size(image_np.shape[1])
         thresh = cv2.adaptiveThreshold(
             background_removed, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
             cv2.THRESH_BINARY, block_size, 2
         )
-
-        # Abertura morfológica para remoção de ruídos pequenos
         kernel_open = np.ones((2, 2), np.uint8)
         morph = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel_open)
-
-        # Correção de inclinação (deskewing) utilizando Transformada de Hough
         edges = cv2.Canny(morph, 50, 150, apertureSize=3)
         lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=100, minLineLength=30, maxLineGap=5)
 
@@ -80,37 +54,48 @@ def preprocess_image(image):
 
     except Exception as e:
         logger.error(f"Erro no pré-processamento da imagem: {str(e)}")
-        return image  # Retorna a imagem original em caso de falha
+        return image
+
+def extract_ocr_relevant_images(pdf_path: str, min_size: tuple = (400, 400), pages_to_sample: int = 3):
+    relevant_images = []
+    try:
+        with fitz.open(pdf_path) as doc:
+            for page_index in range(min(pages_to_sample, len(doc))):
+                page = doc[page_index]
+                images = page.get_images(full=True)
+                for img_index, img_info in enumerate(images):
+                    xref = img_info[0]
+                    base_image = doc.extract_image(xref)
+                    image_bytes = base_image["image"]
+                    img = Image.open(io.BytesIO(image_bytes)).convert("L")
+                    width, height = img.size
+                    if width < min_size[0] or height < min_size[1]:
+                        continue
+                    img_np = np.array(img)
+                    if np.mean(img_np) > 245 or np.mean(img_np) < 10:
+                        continue
+                    hash_digest = hashlib.md5(img_np.tobytes()).hexdigest()
+                    relevant_images.append((img, hash_digest))
+    except FileNotFoundError:
+        logger.error(f"Arquivo não encontrado: {pdf_path}")
+    except Exception as e:
+        logger.error(f"Erro ao extrair imagens do PDF {pdf_path}: {str(e)}")
+    return relevant_images
 
 def has_text_in_images(pdf_path: str, pages_to_sample: int = 1) -> bool:
-    """
-    Verifica se há texto em imagens dentro do PDF.
-    
-    - Aplica pré-processamento avançado antes do OCR.
-    - Utiliza Tesseract com configurações otimizadas para imagens de baixa qualidade.
-    - Registra logs detalhados do processo.
-    
-    :param pdf_path: Caminho para o arquivo PDF.
-    :param pages_to_sample: Número de páginas a serem amostradas.
-    :return: True se texto for detectado; False caso contrário.
-    """
     try:
         start_time = time.time()
-        images = convert_from_path(pdf_path, first_page=1, last_page=pages_to_sample)
+        relevant_images = extract_ocr_relevant_images(pdf_path, pages_to_sample=pages_to_sample)
         detected_texts = []
-        min_text_length = 15  # Limiar mínimo para considerar que o OCR encontrou texto
+        min_text_length = 15
 
-        for i, img in enumerate(images):
+        for i, (img, img_hash) in enumerate(relevant_images):
             processed_img = preprocess_image(img)
-            
-            # Configuração otimizada para OCR
             custom_config = r'--oem 3 --psm 6 -l por+eng'
             text = pytesseract.image_to_string(processed_img, config=custom_config).strip()
-
             if len(text) > min_text_length:
                 detected_texts.append(text)
-
-            logger.info(f"Página {i+1}: Extraído {len(text)} caracteres.")
+            logger.info(f"Imagem relevante {i+1}: Extraído {len(text)} caracteres.")
 
         end_time = time.time()
         if detected_texts:
@@ -123,3 +108,13 @@ def has_text_in_images(pdf_path: str, pages_to_sample: int = 1) -> bool:
     except Exception as e:
         logger.error(f"Erro no OCR do arquivo {pdf_path}: {str(e)}")
         return False
+
+if __name__ == "__main__":
+    import pytest
+    pytest.main([
+        "tests/test_text_analyzer.py",
+        "--cov=src/classification/text_analyzer.py",
+        "--cov-report=html:reports/coverage_text_analyzer",
+        "--html=reports/test_report_text_analyzer.html",
+        "--self-contained-html"
+    ])
